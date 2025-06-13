@@ -431,10 +431,34 @@ body {
 @media (max-width: 500px) {
   .modal {
     min-width: 90vw;
-    padding: 1.2rem 0.5rem 1rem 0.5rem;
+    padding: 1.2rem 1rem 1rem 1rem;
+    max-height: 90vh;
+    overflow-y: auto;
   }
   .modal h2 {
     font-size: 1.2rem;
+    margin-bottom: 1rem;
+  }
+  .modal form {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .modal input {
+    font-size: 16px; /* Prevents zoom on iOS */
+    padding: 0.8rem;
+  }
+  .modal button {
+    padding: 0.8rem;
+    font-size: 1rem;
+  }
+  #login-error {
+    margin-top: 0.5rem;
+    padding: 0.5rem;
+    background: #fff3f3;
+    border: 1px solid #ffcdd2;
+    border-radius: 0.3rem;
+    font-size: 0.9rem;
   }
 }
 /* Dashboard styles */
