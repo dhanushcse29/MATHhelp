@@ -94,6 +94,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
           body: JSON.stringify({
             username: usernameInput,
             password: passwordInput
@@ -166,128 +167,159 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function showDashboard() {
-    fetch('/api/materials').then(r => r.json()).then(materials => {
-      fetch('/api/students').then(r => r.json()).then(students => {
-        fetch('/api/announcements').then(r => r.json()).then(announcements => {
-          showModal(`
-            <div class="dashboard">
-              <h2>${user.role === 'admin' ? 'Admin Dashboard' : 'Student Dashboard'}</h2>
-              <button id="logout-btn">Logout</button>
-              <button type="button" id="cancel-dashboard-btn" style="margin-left:1rem;">Cancel</button>
-              ${user.role === 'admin' ? `
-              <div class="dashboard-section">
-                <h3>Upload Study Material</h3>
-                <form id="upload-form">
-                  <input type="text" name="title" placeholder="Title" required>
-                  <textarea name="description" placeholder="Description"></textarea>
-                  <input type="file" name="file" accept=".pdf,.txt" required>
-                  <button type="submit">Upload</button>
-                </form>
-                <div id="upload-msg"></div>
-              </div>
-              <div class="dashboard-section">
-                <h3>Study Materials</h3>
-                <ul class="material-list">
-                  ${materials.map(m => `<li>${m.title} <a href=\"/api/materials/download/${m._id}\">Download</a></li>`).join('')}
-                </ul>
-              </div>
-              <div class="dashboard-section">
-                <h3>Students</h3>
-                <form id="create-student-form">
-                  <input type="text" name="username" placeholder="Username" required>
-                  <input type="password" name="password" placeholder="Default Password" required>
-                  <button type="submit">Create Student</button>
-                </form>
-                <ul class="student-list">
-                  ${students.map(s => `<li>${s.username} <button data-username=\"${s.username}\" class=\"reset-btn\">Reset Password</button></li>`).join('')}
-                </ul>
-              </div>
-              <div class="dashboard-section">
-                <h3>Post Announcement</h3>
-                <form id="announce-form">
-                  <textarea name="message" placeholder="Announcement" required></textarea>
-                  <button type="submit">Post</button>
-                </form>
-              </div>
-              <div class="dashboard-section">
-                <h3>Announcements</h3>
-                <ul class="material-list">
-                  ${announcements.map(a => `<li>${a.message} <small>by ${a.creator?.username || 'Admin'} (${new Date(a.createdAt).toLocaleString()})</small></li>`).join('')}
-                </ul>
-              </div>
-              ` : `
-              <div class="dashboard-section">
-                <h3>Study Materials</h3>
-                <ul class="material-list">
-                  ${materials.map(m => `<li>${m.title} <a href=\"/api/materials/download/${m._id}\">Download</a></li>`).join('')}
-                </ul>
-              </div>
-              `}
-            </div>
-          `);
-          document.getElementById('logout-btn').onclick = async () => {
-            await fetch('/api/auth/logout', { method: 'POST' });
-            user = null;
-            updateNavbar();
-            closeModal();
-          };
-          document.getElementById('cancel-dashboard-btn').onclick = closeModal;
-          if (user.role === 'admin') {
-            document.getElementById('upload-form').onsubmit = async e => {
-              e.preventDefault();
-              const fd = new FormData(e.target);
-              const res = await fetch('/api/materials/upload', {
-                method: 'POST',
-                body: fd
-              });
-              const data = await res.json();
-              document.getElementById('upload-msg').textContent = data.message;
-              if (res.ok) showDashboard();
-            };
-            document.getElementById('create-student-form').onsubmit = async e => {
-              e.preventDefault();
-              const fd = new FormData(e.target);
-              const res = await fetch('/api/students/create', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  username: fd.get('username'),
-                  password: fd.get('password')
-                })
-              });
-              const data = await res.json();
-              if (res.ok) showDashboard();
-              else alert(data.message);
-            };
-            document.querySelectorAll('.reset-btn').forEach(btn => {
-              btn.onclick = async () => {
-                const newPassword = prompt('Enter new password for ' + btn.dataset.username);
-                if (!newPassword) return;
-                const res = await fetch('/api/students/reset-password', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ username: btn.dataset.username, newPassword })
-                });
-                const data = await res.json();
-                if (res.ok) showDashboard();
-                else alert(data.message);
-              };
+    Promise.all([
+      fetch('/api/materials', { credentials: 'include' }).then(r => {
+        if (!r.ok) throw new Error('Failed to fetch materials');
+        return r.json();
+      }),
+      fetch('/api/students', { credentials: 'include' }).then(r => {
+        if (!r.ok) throw new Error('Failed to fetch students');
+        return r.json();
+      }),
+      fetch('/api/announcements', { credentials: 'include' }).then(r => {
+        if (!r.ok) throw new Error('Failed to fetch announcements');
+        return r.json();
+      })
+    ]).then(([materials, students, announcements]) => {
+      if (!Array.isArray(materials)) {
+        console.error('Materials data is not an array:', materials);
+        materials = [];
+      }
+      if (!Array.isArray(students)) {
+        console.error('Students data is not an array:', students);
+        students = [];
+      }
+      if (!Array.isArray(announcements)) {
+        console.error('Announcements data is not an array:', announcements);
+        announcements = [];
+      }
+      
+      showModal(`
+        <div class="dashboard">
+          <h2>${user.role === 'admin' ? 'Admin Dashboard' : 'Student Dashboard'}</h2>
+          <button id="logout-btn">Logout</button>
+          <button type="button" id="cancel-dashboard-btn" style="margin-left:1rem;">Cancel</button>
+          ${user.role === 'admin' ? `
+          <div class="dashboard-section">
+            <h3>Upload Study Material</h3>
+            <form id="upload-form">
+              <input type="text" name="title" placeholder="Title" required>
+              <textarea name="description" placeholder="Description"></textarea>
+              <input type="file" name="file" accept=".pdf,.txt" required>
+              <button type="submit">Upload</button>
+            </form>
+            <div id="upload-msg"></div>
+          </div>
+          <div class="dashboard-section">
+            <h3>Study Materials</h3>
+            <ul class="material-list">
+              ${materials.map(m => `<li>${m.title} <a href="/api/materials/download/${m._id}">Download</a></li>`).join('')}
+            </ul>
+          </div>
+          <div class="dashboard-section">
+            <h3>Students</h3>
+            <form id="create-student-form">
+              <input type="text" name="username" placeholder="Username" required>
+              <input type="password" name="password" placeholder="Default Password" required>
+              <button type="submit">Create Student</button>
+            </form>
+            <ul class="student-list">
+              ${students.map(s => `<li>${s.username} <button data-username="${s.username}" class="reset-btn">Reset Password</button></li>`).join('')}
+            </ul>
+          </div>
+          <div class="dashboard-section">
+            <h3>Post Announcement</h3>
+            <form id="announce-form">
+              <textarea name="message" placeholder="Announcement" required></textarea>
+              <button type="submit">Post</button>
+            </form>
+          </div>
+          <div class="dashboard-section">
+            <h3>Announcements</h3>
+            <ul class="material-list">
+              ${announcements.map(a => `<li>${a.message} <small>by ${a.creator?.username || 'Admin'} (${new Date(a.createdAt).toLocaleString()})</small></li>`).join('')}
+            </ul>
+          </div>
+          ` : `
+          <div class="dashboard-section">
+            <h3>Study Materials</h3>
+            <ul class="material-list">
+              ${materials.map(m => `<li>${m.title} <a href="/api/materials/download/${m._id}">Download</a></li>`).join('')}
+            </ul>
+          </div>
+          `}
+        </div>
+      `);
+      document.getElementById('logout-btn').onclick = async () => {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        user = null;
+        updateNavbar();
+        closeModal();
+      };
+      document.getElementById('cancel-dashboard-btn').onclick = closeModal;
+      if (user.role === 'admin') {
+        document.getElementById('upload-form').onsubmit = async e => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          const res = await fetch('/api/materials/upload', {
+            method: 'POST',
+            body: fd
+          });
+          const data = await res.json();
+          document.getElementById('upload-msg').textContent = data.message;
+          if (res.ok) showDashboard();
+        };
+        document.getElementById('create-student-form').onsubmit = async e => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          const res = await fetch('/api/students/create', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: fd.get('username'),
+              password: fd.get('password')
+            })
+          });
+          const data = await res.json();
+          if (res.ok) showDashboard();
+          else alert(data.message);
+        };
+        document.querySelectorAll('.reset-btn').forEach(btn => {
+          btn.onclick = async () => {
+            const newPassword = prompt('Enter new password for ' + btn.dataset.username);
+            if (!newPassword) return;
+            const res = await fetch('/api/students/reset-password', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ username: btn.dataset.username, newPassword })
             });
-            document.getElementById('announce-form').onsubmit = async e => {
-              e.preventDefault();
-              const fd = new FormData(e.target);
-              const res = await fetch('/api/announcements/post', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: fd.get('message') })
-              });
-              const data = await res.json();
-              if (res.ok) showDashboard();
-              else alert(data.message);
-            };
-          }
+            const data = await res.json();
+            if (res.ok) showDashboard();
+            else alert(data.message);
+          };
         });
-      });
+        document.getElementById('announce-form').onsubmit = async e => {
+          e.preventDefault();
+          const fd = new FormData(e.target);
+          const res = await fetch('/api/announcements/post', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: fd.get('message') })
+          });
+          const data = await res.json();
+          if (res.ok) showDashboard();
+          else alert(data.message);
+        };
+      }
+    }).catch(error => {
+      console.error('Dashboard error:', error);
+      showModal(`
+        <div class="dashboard">
+          <h2>Error</h2>
+          <p>Failed to load dashboard. Please try logging in again.</p>
+          <button onclick="window.location.reload()">Reload Page</button>
+        </div>
+      `);
     });
   }
 
