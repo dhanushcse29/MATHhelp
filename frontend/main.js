@@ -1,5 +1,19 @@
 document.addEventListener('DOMContentLoaded', function() {
   let user = null;
+  
+  // Base URL configuration
+  const BASE_URL = window.location.hostname === 'localhost' 
+    ? 'http://localhost:5000'
+    : 'https://mathhelper-k8al.onrender.com';
+
+  // Update all fetch calls to use BASE_URL
+  async function fetchWithBase(url, options = {}) {
+    const fullUrl = url.startsWith('http') ? url : `${BASE_URL}${url}`;
+    return fetch(fullUrl, {
+      ...options,
+      credentials: 'include'
+    });
+  }
 
   function showModal(html) {
     const modal = document.createElement('div');
@@ -91,10 +105,9 @@ document.addEventListener('DOMContentLoaded', function() {
       const errorDiv = document.getElementById('login-error');
       
       try {
-        const res = await fetch('/api/auth/login', {
+        const res = await fetchWithBase('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
           body: JSON.stringify({
             username: usernameInput,
             password: passwordInput
@@ -168,15 +181,15 @@ document.addEventListener('DOMContentLoaded', function() {
 
   function showDashboard() {
     Promise.all([
-      fetch('/api/materials', { credentials: 'include' }).then(r => {
+      fetchWithBase('/api/materials').then(r => {
         if (!r.ok) throw new Error('Failed to fetch materials');
         return r.json();
       }),
-      fetch('/api/students', { credentials: 'include' }).then(r => {
+      fetchWithBase('/api/students').then(r => {
         if (!r.ok) throw new Error('Failed to fetch students');
         return r.json();
       }),
-      fetch('/api/announcements', { credentials: 'include' }).then(r => {
+      fetchWithBase('/api/announcements').then(r => {
         if (!r.ok) throw new Error('Failed to fetch announcements');
         return r.json();
       })
@@ -317,9 +330,12 @@ document.addEventListener('DOMContentLoaded', function() {
         <div class="dashboard">
           <h2>Error</h2>
           <p>Failed to load dashboard. Please try logging in again.</p>
-          <button onclick="window.location.reload()">Reload Page</button>
+          <button id="reload-dashboard-btn">Reload Page</button>
         </div>
       `);
+      document.getElementById('reload-dashboard-btn').addEventListener('click', () => {
+        window.location.reload();
+      });
     });
   }
 
@@ -354,6 +370,35 @@ document.addEventListener('DOMContentLoaded', function() {
       else showStudentView();
     }
   }
+
+  // Add a function to check session status
+  async function checkSessionStatus() {
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
+      const data = await res.json();
+      if (!data.loggedIn) {
+        // Session expired or invalid
+        user = null;
+        updateNavbar();
+        showModal(`
+          <div class="dashboard">
+            <h2>Session Expired</h2>
+            <p>Your session has expired. Please log in again.</p>
+            <button id="login-again-btn">Login Again</button>
+          </div>
+        `);
+        document.getElementById('login-again-btn').addEventListener('click', () => {
+          closeModal();
+          loginLink.click();
+        });
+      }
+    } catch (error) {
+      console.error('Session check failed:', error);
+    }
+  }
+
+  // Check session status periodically
+  setInterval(checkSessionStatus, 5 * 60 * 1000); // Check every 5 minutes
 
   checkSession();
 
